@@ -9,7 +9,7 @@
  *  • Caches are named `sv-static-<VERSION>`; every other cache (including the old site's) is deleted on activate.
  *    Bump VERSION when this file's logic changes. A new worker waits until the page asks for it (message SKIP_WAITING, see js/store/pwa.js).
  */
-const VERSION = 'v2';
+const VERSION = 'v3';
 const STATIC = `sv-static-${VERSION}`;
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [OFFLINE_URL];
