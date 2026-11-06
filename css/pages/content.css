@@ -1,0 +1,4 @@
+/* CMS pages (/page/:slug). The text styling is the shared .prose class. */
+.cms { max-width: 760px; }
+.cms .page-title { margin-bottom: var(--s-4); }
+.cms-updated { margin: var(--s-8) 0 0; }

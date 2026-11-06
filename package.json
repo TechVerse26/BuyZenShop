@@ -1,0 +1,20 @@
+{
+  "name": "shop-verse",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Shop Verse — static, Firebase-backed e-commerce storefront + admin panel (no build step).",
+  "scripts": {
+    "dev": "node tools/dev-server.mjs",
+    "test": "node tools/run-tests.mjs tests/unit tests/rules",
+    "test:unit": "node tools/run-tests.mjs tests/unit",
+    "test:rules": "node tools/run-tests.mjs tests/rules",
+    "test:e2e": "node tests/e2e/run.mjs --both",
+    "test:flows": "node tests/e2e/flows.mjs --both",
+    "check": "node tools/check-syntax.mjs && node tools/check-imports.mjs",
+    "docs:index": "node tools/api-index.mjs && node tools/css-index.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module"
+}

@@ -1,0 +1,67 @@
+# ডিপ্লয়মেন্ট গাইড (Firebase + Vercel)
+
+এই গাইড ধরে নেয় আপনার Firebase প্রজেক্ট আগে থেকেই আছে (`.firebaserc` → `shopverse-signup`; অন্য প্রজেক্ট ব্যবহার করতে `js/config/firebase-config.js` ও `.firebaserc` বদলান)।
+কোনো build ধাপ নেই — ফাইলগুলো যেমন আছে তেমনই হোস্ট হয়।
+
+## ১. আগে থেকে দরকার
+- Node.js ≥ 20 (লোকাল টেস্ট/টুলের জন্য), `npm i -g firebase-tools`, Firebase ও Vercel অ্যাকাউন্ট।
+- Firebase Console-এ: **Firestore Database** (Production mode) ও **Storage** তৈরি করা।
+
+## ২. Authentication
+Console → Authentication → Sign-in method:
+- **Email/Password** এবং **Google** চালু করুন (গ্রাহক ও স্টাফ লগইন)।
+- **Phone** (ফোন OTP) ঐচ্ছিক — Firebase-এর billing plan ও reCAPTCHA লাগে; চালু না করলে ফোন লগইন বাটন কাজ করবে না।
+- Settings → **Authorized domains**-এ আপনার Vercel ডোমেইন (ও কাস্টম ডোমেইন) যোগ করুন। অব্যবহৃত ডোমেইন সরিয়ে দিন।
+- Google Cloud Console → APIs & Services → Credentials → Browser key → **HTTP referrers** দিয়ে শুধু আপনার ডোমেইনে সীমিত করুন (`firebase-config.js`-এর key প্রকাশ্য, কিন্তু ব্যবহার সীমিত করা ভালো)।
+
+## ৩. Rules ডিপ্লয়
+```bash
+firebase login
+firebase use shopverse-signup          # আপনার প্রজেক্ট ID
+firebase deploy --only firestore:rules,firestore:indexes,storage
+```
+⚠️ **পুরনো সাইট ভাঙার সময়সীমা:** নতুন rules ডিপ্লয়ের পর পুরনো কাঠামোর লেখা (পুরনো অ্যাডমিন, পুরনো অর্ডার ফ্লো) আর চলবে না। তাই rules ডিপ্লয়, নতুন সাইট ডিপ্লয়, প্রথম Super Admin তৈরি ও মাইগ্রেশন — এগুলো একই সময়ে (কম ব্যবহারের সময়ে) করুন।
+
+### Cross-service rules
+`storage.rules` ছবি আপলোডের অনুমতি যাচাই করতে Firestore-এর `staff/{uid}` ডকুমেন্ট পড়ে (`firestore.get()`)। প্রথমবার Storage rules ডিপ্লয়ের সময় Firebase CLI জিজ্ঞেস করে
+Storage সার্ভিসকে **"Firebase Rules Firestore Service Agent"** (`roles/firebaserules.firestoreServiceAgent`) রোল দেওয়া হবে কি না — **Y** দিন (একবারই লাগে; CLI সংস্করণ অনুযায়ী বার্তার ভাষা কিছুটা আলাদা হতে পারে)।
+না দিলে ছবি আপলোড "permission denied" দেবে। আপলোড শুধু Super Admin, Store Admin ও Product Manager পারেন; শুধু ছবি (JPEG/PNG/WebP), সর্বোচ্চ ৫ MB; SVG অনুমোদিত নয়।
+
+## ৪. প্রথম Super Admin (সুরক্ষিত বুটস্ট্র্যাপ)
+স্টাফ ডকুমেন্ট বানাতে স্টাফ-অনুমতি লাগে — তাই প্রথম জনকে Console থেকে হাতে বানাতে হয় (এটাই ইচ্ছাকৃত: কেউ নিজেকে প্রমোট করতে পারে না)।
+1. `https://<আপনার-ডোমেইন>/admin/` খুলে সাইন-ইন করুন (Google বা ইমেইল)।
+2. "এই অ্যাকাউন্ট স্টাফ নয়" স্ক্রিনে **আপনার UID** দেখাবে (কপি বাটন আছে)।
+3. Firebase Console → Firestore → **Start collection** `staff` → Document ID = আপনার UID → ফিল্ড:
+   `role` (string) = `super_admin` · `active` (boolean) = `true` · `email` (string) · `name` (string)।
+4. পেজ রিফ্রেশ করুন — অ্যাডমিন প্যানেল খুলবে। এরপর বাকি স্টাফকে *স্টাফ ও রোল* পেজ থেকে যোগ করুন (সেই ব্যক্তিকে আগে স্টোরে (`/login`) একবার সাইন-আপ/লগইন করতে বলুন — তাহলে *ইমেইল দিয়ে অ্যাকাউন্ট খুঁজুন* কাজ করে; নাহলে তাঁর UID সরাসরি বসান)।
+
+## ৫. মাইগ্রেশন ও প্রাথমিক সেটআপ
+অ্যাডমিন → **সেটআপ ও মাইগ্রেশন**:
+- চেকলিস্ট (সেটিংস, যোগাযোগ, পেমেন্ট, শিপিং জোন, ক্যাটাগরি, প্রোডাক্ট, ইনভেন্টরি, হোম, ইনভয়েস, স্টাফ) — সবুজ না হওয়া পর্যন্ত পাশের লিঙ্ক অনুসরণ করুন।
+- পুরনো (পূর্ববর্তী সাইটের) প্রোডাক্ট থাকলে: **প্রিভিউ** → কী কী বদলাবে দেখুন → **চালান** (শুধু Super Admin)। পুরনো দাম → নতুন `price`/`salePrice`, ইনভেন্টরি ডকুমেন্ট, slug ইনডেক্স, ডিফল্ট ক্যাটাগরি/জোন/সেটিংস তৈরি হয়; পুরনো ফিল্ড মোছা হয় না; মাঝপথে থামলে আবার চালান — যা হয়ে গেছে তা বাদ দিয়ে এগোয়।
+- পুরনো রিভিউ মাইগ্রেট হয় না; পুরনো অর্ডার "ভেরিফায়েড পারচেজ" হিসেবে গণ্য হয় না।
+- **সেটিংস** পেজে bKash/Nagad নম্বর, যোগাযোগ, অর্ডার প্রিফিক্স, রিটার্ন সময়, ঘোষণা, ইনভয়েস তথ্য, Tawk.to চ্যাট ID দিন।
+
+## ৬. Vercel
+1. প্রজেক্ট ইমপোর্ট করুন (Git রিপো বা `vercel` CLI)। **Framework Preset: Other**, Build Command ফাঁকা, Output Directory `.`/ডিফল্ট।
+2. `vercel.json` রিরাইট (হিস্ট্রি-রাউটিং), নিরাপত্তা হেডার ও ক্যাশ নিয়ম দেয়; `.vercelignore` টেস্ট/টুল/ডকস/rules ফাইল ডিপ্লয় থেকে বাদ রাখে।
+3. `Content-Security-Policy-Report-Only` হেডার দেওয়া আছে (ব্লক করে না, শুধু কনসোলে রিপোর্ট)। আসল Firebase/Tawk দিয়ে পরীক্ষা করে নিশ্চিত না হয়ে enforcing CSP চালু করবেন না।
+4. Service worker (`/sw.js`): পেজ সবসময় নেটওয়ার্ক থেকে; অফলাইনে `offline.html`; একই ডোমেইনের JS/CSS/ছবি নেটওয়ার্ক-ফার্স্ট; Firebase/Firestore/Auth/Storage ট্রাফিক কখনো ক্যাশ হয় না (দাম/স্টক পুরনো দেখানোর ঝুঁকি নেই)। লজিক বদলালে `sw.js`-এর `VERSION` বাড়ান।
+5. কাস্টম ডোমেইন বসালে `robots.txt` ও `sitemap.xml`-এর `https://tvshops.vercel.app` বদলান।
+
+## ৭. ঐচ্ছিক
+- **ইমেইল:** অর্ডার/সাপোর্ট ইমেইলের জন্য Firebase Extension "Trigger Email from Firestore" ইনস্টল করুন (collection: `mail`)। এক্সটেনশন না থাকলে `mail` ডকুমেন্ট জমা হয় কিন্তু **কোনো ইমেইল যায় না**।
+- **লাইভ চ্যাট:** Tawk.to প্রপার্টি/উইজেট ID সেটিংস পেজে।
+- **সাইটম্যাপ:** `sitemap.xml`-এ শুধু স্ট্যাটিক রুট আছে; প্রোডাক্ট/ক্যাটাগরি যোগ করতে আলাদা স্ক্রিপ্ট লাগবে (এই রিলিজে নেই)।
+
+## ৮. রোলব্যাক
+- সাইট: Vercel → Deployments → আগের ডিপ্লয়মেন্টে "Promote/Rollback"।
+- Rules: Firebase Console → Firestore/Storage → Rules → ইতিহাস থেকে আগের সংস্করণ প্রকাশ। (পুরনো rules ফেরালে নতুন অ্যাডমিন/অর্ডার ফ্লো ভাঙবে — ডেটা মোছা হয় না।)
+
+## ৯. ডিপ্লয়ের পর যাচাই তালিকা
+- [ ] `/admin/` থেকে Super Admin লগইন কাজ করছে, *সেটআপ ও মাইগ্রেশন* চেকলিস্টে লাল নেই।
+- [ ] একটি টেস্ট অর্ডার (COD) দিন → অর্ডার পেজে দেখা যাচ্ছে, স্টক রিজার্ভ হয়েছে।
+- [ ] bKash/Nagad অর্ডারে পেমেন্ট "যাচাই বাকি" দেখাচ্ছে; স্টাফ যাচাই করলে বদলাচ্ছে।
+- [ ] ছবি আপলোড কাজ করছে (Cross-service rules দেওয়া হয়েছে)।
+- [ ] ব্রাউজার কনসোলে CSP রিপোর্ট দেখে প্রয়োজনীয় হোস্ট যোগ হয়েছে কি না দেখুন।
+- [ ] ফোনে (৩৬০px) স্টোর ও অ্যাডমিন একবার ঘুরে দেখুন; "Add to Home screen" দিয়ে PWA ইনস্টল পরীক্ষা করুন।
