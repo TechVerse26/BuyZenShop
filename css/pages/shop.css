@@ -1,0 +1,42 @@
+/* Product listing page (shop / search / category / brand). Tokens only. */
+.shop-head { margin-bottom: var(--s-4); }
+.shop-head .page-title { margin: 0 0 var(--s-1); }
+.shop-head p { margin: 0; }
+
+.shop-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-4); }
+.shop-filter-btn { position: relative; }
+.shop-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-full); background: var(--brand-600); color: var(--on-brand); font-size: 11px; font-weight: 700; }
+.shop-badge[hidden] { display: none; }
+.shop-sort { display: inline-flex; align-items: center; gap: var(--s-2); margin-inline-start: auto; }
+.shop-sort .select { width: auto; min-width: 170px; }
+
+.shop-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-6); align-items: start; }
+.shop-side { display: none; }
+.shop-main { min-width: 0; }
+.shop-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-bottom: var(--s-4); }
+.shop-chips:empty { display: none; }
+.shop-chips .chip { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.shop-clear { font-size: var(--fs-sm); }
+#shop-pager { margin-top: var(--s-8); }
+
+@media (min-width: 960px) {
+  .shop-layout { grid-template-columns: 240px minmax(0, 1fr); gap: var(--s-8); }
+  .shop-side { display: block; position: sticky; top: calc(var(--header-h) + var(--s-4)); max-height: calc(100vh - var(--header-h) - var(--s-8)); overflow-y: auto; padding-inline-end: var(--s-2); }
+  .shop-filter-btn { display: none; }
+}
+
+/* facets — used in the sidebar and inside the mobile filter drawer */
+.facet { padding-block: var(--s-4); border-bottom: 1px solid var(--border); }
+.facet:first-child { padding-top: 0; }
+.facet:last-child { border-bottom: 0; }
+.facet-title { margin: 0 0 var(--s-3); font-size: var(--fs-sm); font-weight: 600; }
+.facet-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.facet-btn, .facet-list a { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); width: 100%; min-height: 40px; padding: 0 var(--s-2); border: 0; border-radius: var(--r-md); background: none; color: var(--text-2); font: inherit; text-align: start; cursor: pointer; }
+.facet-btn:hover, .facet-list a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+.facet-btn.is-active { background: var(--surface-2); color: var(--text); font-weight: 600; }
+.facet-current { padding: 6px var(--s-2); }
+.facet-sub { padding-inline-start: var(--s-3); }
+.facet-price { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.facet-price .input { flex: 1 1 72px; width: auto; min-width: 0; }
+.facet-price .btn { flex: 1 1 100%; }
+.facet-checks { display: grid; gap: var(--s-1); }

@@ -1,0 +1,21 @@
+/* Categories & brands (admin) — page rules only. Tokens, no hard-coded colours; works at 360 px, light and dark. */
+.tax-thumb { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--border); color: var(--text-3); overflow: hidden; }
+.tax-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tax-name { min-width: 0; }
+.tax-slug { overflow-wrap: anywhere; }
+.tax-cell { min-width: 0; }
+.tax-sub { margin-top: 2px; color: var(--text-3); font-size: var(--fs-xs); }
+.tax-move { display: inline-flex; gap: var(--s-1); }
+.tax-move .btn[disabled] { opacity: .35; }
+.tax-child .cell-first { padding-inline-start: var(--s-8, 40px); }
+@media (max-width: 640px) {
+  .tax-child { margin-inline-start: var(--s-5, 20px); border-inline-start: 3px solid var(--border); }
+  .tax-child .cell-first { padding-inline-start: 0; }
+}
+
+.tax-img { display: grid; gap: var(--s-2); }
+.tax-img-row { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.tax-img-box { flex: none; display: grid; place-items: center; width: 72px; height: 72px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--border); color: var(--text-3); overflow: hidden; }
+.tax-img-box img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tax-img-btns { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.tax-img-btns [hidden] { display: none; }

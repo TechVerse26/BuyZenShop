@@ -1,0 +1,19 @@
+/* Contact page. Tokens only. */
+.ct { display: grid; gap: var(--s-4); align-content: start; }
+.ct .page-title, .ct-lead { margin: 0; }
+.ct-lead { max-width: 60ch; }
+.ct-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-5); align-items: start; }
+@media (min-width: 900px) { .ct-grid { grid-template-columns: 320px minmax(0, 1fr); } .ct-grid.is-single { grid-template-columns: minmax(0, 640px); } }
+.ct-card { display: grid; gap: var(--s-4); min-width: 0; padding: var(--s-4); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
+@media (min-width: 640px) { .ct-card { padding: var(--s-5); } }
+.ct-card h2 { margin: 0; font-size: var(--fs-lg); }
+.ct-list { display: grid; gap: var(--s-3); margin: 0; padding: 0; list-style: none; }
+.ct-list li { display: flex; align-items: flex-start; gap: var(--s-3); min-width: 0; overflow-wrap: anywhere; }
+.ct-list svg { flex: none; margin-top: 2px; color: var(--text-2); }
+.ct-form { display: grid; gap: var(--s-4); }
+.ct-hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.ct-done { display: grid; justify-items: center; gap: var(--s-3); max-width: 480px; margin: var(--s-8) auto; padding: var(--s-6) var(--s-4); text-align: center; }
+.ct-done > svg { color: var(--success); }
+.ct-done h1 { margin: 0; font-size: var(--fs-2xl); }
+.ct-done p { margin: 0; overflow-wrap: anywhere; }
+.ct-done-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); margin-top: var(--s-2); }

@@ -1,0 +1,36 @@
+/* Customers (admin) — the list and one profile. Page rules only; tokens, no hard-coded colours; works at 360 px, light and dark. */
+.cus-tabs { margin-bottom: var(--s-4); }
+.cus-n { display: inline-block; min-width: 22px; margin-inline-start: var(--s-2); padding: 0 6px; border-radius: var(--r-full); background: var(--surface-3); color: var(--text-2); font-size: var(--fs-xs); line-height: 20px; text-align: center; }
+.tab[aria-selected="true"] .cus-n { background: var(--brand-50); color: var(--brand-700); }
+
+/* panels sit directly under each other and carry their own frame: no gap doubling, no table frame inside a panel */
+.cus .panel + .panel { margin-top: 0; }
+.cus .panel .table-wrap { border: 0; border-radius: 0; background: transparent; }
+.cus .page-head h1 { overflow-wrap: anywhere; }
+.cus .page-head .page-sub { overflow-wrap: anywhere; }
+.cus-name { overflow-wrap: anywhere; }
+.cus-sub { color: var(--text-2); font-size: var(--fs-sm); }
+.cus-more { display: flex; justify-content: center; padding-top: var(--s-4); }
+.cus-kpis { margin-bottom: 0; }
+.cus-pay { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); }
+.cus-id { overflow-wrap: anywhere; font-size: var(--fs-sm); }
+.cus-reason { margin: 0 0 var(--s-1); overflow-wrap: anywhere; }
+
+.cus-list { margin: 0; padding: 0; list-style: none; display: grid; }
+.cus-list > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); padding: var(--s-3) 0; border-top: 1px solid var(--border); }
+.cus-list > li:first-child { border-top: 0; padding-top: 0; }
+.cus-ticket { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.cus-badges { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+
+.cus-notes { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--s-3); }
+.cus-note { display: grid; gap: var(--s-2); padding: var(--s-3) var(--s-4); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
+.cus-note-text { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.cus-note-meta { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); color: var(--text-2); font-size: var(--fs-xs); }
+.cus-note-meta > span { min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  .cus .panel .table-stack tr { padding-inline: 0; }
+  .cus-tabs { gap: 0; }
+  .cus-tabs .tab { flex: 1 1 auto; padding-inline: var(--s-2); text-align: center; }
+  .cus-n { min-width: 20px; margin-inline-start: var(--s-1); padding: 0 5px; }
+}

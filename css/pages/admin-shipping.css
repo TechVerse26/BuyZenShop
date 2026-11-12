@@ -1,0 +1,27 @@
+/* Shipping zones (admin) — page rules only. Tokens, no hard-coded colours; works at 360 px, light and dark. */
+.shz-cover { margin-bottom: var(--s-5); align-items: flex-start; }
+.shz-cover-text { margin: var(--s-1) 0 0; color: var(--text-2); }
+.shz-gap { margin-top: var(--s-3); }
+.shz-gap summary { cursor: pointer; font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+.shz-gap p { margin: var(--s-2) 0 0; font-size: var(--fs-sm); color: var(--text-2); overflow-wrap: anywhere; }
+.shz-note { color: var(--text-3); font-size: var(--fs-xs); text-align: end; }
+
+.shz-two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); align-items: start; }
+.shz-eta { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); align-items: start; }
+@media (max-width: 520px) { .shz-two { grid-template-columns: 1fr; } }
+
+.shz-pick { margin: 0; padding: var(--s-4); min-width: 0; border: 1px solid var(--border); border-radius: var(--r-md); }
+.shz-pick legend { padding-inline: var(--s-2); font-weight: 600; }
+.shz-count { color: var(--text-2); font-weight: 600; }
+.shz-div + .shz-div { margin-top: var(--s-4); }
+.shz-div-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-bottom: var(--s-2); }
+.shz-div-head h4 { margin: 0; font-size: var(--fs-sm); color: var(--text-2); }
+.shz-div-tools { display: inline-flex; gap: var(--s-1); flex: none; }
+.shz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: var(--s-2); }
+.shz-opt { display: grid; grid-template-columns: auto 1fr; column-gap: var(--s-2); align-items: center; min-height: 44px; padding: var(--s-1) var(--s-3); border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); cursor: pointer; min-width: 0; }
+.shz-opt input { grid-row: 1 / span 2; width: 18px; height: 18px; margin: 0; accent-color: var(--brand-600); }
+.shz-opt:has(input:checked) { border-color: var(--brand-600); background: var(--brand-50); }
+.shz-opt:has(input:disabled) { cursor: not-allowed; background: var(--surface-2); color: var(--text-3); }
+.shz-opt-name { overflow-wrap: anywhere; }
+.shz-opt-note { grid-column: 2; font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shz-opt-note:empty { display: none; }

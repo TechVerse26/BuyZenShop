@@ -1,0 +1,10 @@
+tests
+tools
+docs
+node_modules
+firestore.rules
+firestore.indexes.json
+storage.rules
+firebase.json
+.firebaserc
+*.md

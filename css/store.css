@@ -1,0 +1,58 @@
+/* ==========================================================================
+   Storefront shared styles: page spacing, section headings, product card + grid.
+   Header / footer / tab bar / auth: store-chrome.css. Per-page: css/pages/*.css.
+   ========================================================================== */
+
+.page { padding-block: var(--s-6) var(--s-12); }
+.page-title { font-size: var(--fs-2xl); margin-bottom: var(--s-2); }
+.page-lead { color: var(--text-2); max-width: 62ch; }
+.section { margin-block: var(--s-10); }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-4); margin-bottom: var(--s-4); }
+.section-head h2 { font-size: var(--fs-xl); }
+.section-head a { font-weight: 600; font-size: var(--fs-sm); }
+.crumbs { margin-bottom: var(--s-4); }
+
+/* ───────────── product grid + card ───────────── */
+.product-grid { display: grid; gap: var(--s-4); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 640px) { .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 960px) { .product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-5); } }
+.product-grid.dense { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 640px) { .product-grid.dense { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .product-grid.dense { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (max-width: 380px) { .product-grid { gap: var(--s-3); } }
+
+.p-card {
+  position: relative; display: flex; flex-direction: column; min-width: 0; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden;
+  transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
+}
+.p-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.p-media { position: relative; display: block; aspect-ratio: 1 / 1; background: var(--surface-2); overflow: hidden; }
+.p-media img { width: 100%; height: 100%; object-fit: cover; }
+.p-media.is-empty { display: flex; align-items: center; justify-content: center; color: var(--text-3); }
+.p-media.is-empty .icon { width: 40px; height: 40px; stroke-width: 1.3; }
+.p-flags { position: absolute; z-index: 1; inset-block-start: var(--s-2); inset-inline-start: var(--s-2); display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); pointer-events: none; }
+.p-wish {
+  position: absolute; z-index: 3; inset-block-start: var(--s-2); inset-inline-end: var(--s-2); width: 40px; height: 40px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; background: var(--surface); border: 1px solid var(--border); color: var(--text-2);
+}
+.p-wish:hover { color: var(--danger); border-color: var(--danger-bd); }
+.p-wish[aria-pressed="true"] { color: var(--danger); }
+.p-wish[aria-pressed="true"] .icon { fill: currentColor; }
+.p-body { display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-3) var(--s-3) var(--s-3); flex: 1; }
+.p-cat { font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-name { font-weight: 600; line-height: 1.35; color: var(--text); text-decoration: none; font-size: var(--fs-sm); min-height: calc(1.35em * 2); }
+.p-name:hover { text-decoration: none; color: var(--brand-700); }
+.p-name::after { content: ""; position: absolute; inset: 0; z-index: 1; }   /* the whole card is one link */
+.p-foot { margin-top: auto; padding-top: var(--s-2); display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
+.p-foot .price { font-size: var(--fs-md); }
+.p-add { position: relative; z-index: 3; flex: none; }
+.p-add.btn-icon { width: 40px; min-height: 40px; }
+.skeleton-card { border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--s-3); background: var(--surface); }
+
+/* breadcrumbs (<nav class="crumbs"><ol><li><a>…</a></li><li aria-current="page">…</li></ol></nav>) */
+.crumbs ol { display: flex; flex-wrap: wrap; gap: 4px var(--s-2); margin: 0; padding: 0; list-style: none; color: var(--text-3); font-size: var(--fs-sm); }
+.crumbs li + li::before { content: '/'; margin-inline-end: var(--s-2); color: var(--border-strong); }
+.crumbs a { color: var(--text-2); }
+.crumbs a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.crumbs [aria-current="page"] { color: var(--text); }

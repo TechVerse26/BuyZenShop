@@ -1,0 +1,44 @@
+rules_version = '2';
+
+/*
+ * Shop Verse — Cloud Storage rules.
+ * Public read for catalogue / site imagery; writes only by active staff (checked against the
+ * staff/{uid} document through the cross-service firestore.get()), images only, max 5 MB.
+ * SVG is deliberately NOT allowed (script-bearing files).
+ * See docs/DEPLOYMENT.md → "Cross-service rules" for the one-time IAM prompt on first deploy.
+ */
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function staffData() {
+      return firestore.get(/databases/(default)/documents/staff/$(request.auth.uid)).data;
+    }
+    function canUpload() {
+      return request.auth != null
+        && staffData().active == true
+        && staffData().role in ['super_admin', 'store_admin', 'product_manager'];
+    }
+    function validImage() {
+      return request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
+    // Product galleries: products/{productId}/{imageId}-{large|thumb}.webp
+    match /products/{productId}/{fileName} {
+      allow read: if true;
+      allow create, update: if canUpload() && validImage();
+      allow delete: if canUpload();
+    }
+
+    // Banners, category / brand images, logo: site/{kind}/{fileName}
+    match /site/{kind}/{fileName} {
+      allow read: if true;
+      allow create, update: if canUpload() && validImage();
+      allow delete: if canUpload();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,6 @@
+/* Wishlist page. Tokens only. */
+.wl-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s-1) var(--s-4); margin-bottom: var(--s-4); }
+.wl-head .page-title { margin: 0; }
+.wl-head p { margin: 0; }
+.wl > .alert { margin-bottom: var(--s-4); }
+.wl > .alert > span { min-width: 0; }

@@ -1,0 +1,22 @@
+/* Coupons (admin) — page rules only. Tokens, no hard-coded colours; works at 360 px, light and dark. */
+.cpn-code { letter-spacing: .03em; font-variant-numeric: tabular-nums; }
+/* one wrapper per cell: a stacked (phone) row lays its direct children out side by side */
+.cpn-cell { min-width: 0; overflow-wrap: anywhere; }
+.cpn-sub { margin-top: 2px; color: var(--text-3); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.cpn-h { margin: var(--s-4) 0 0; padding-top: var(--s-4); border-top: 1px solid var(--border); font-size: var(--fs-sm); font-weight: 600; color: var(--text); text-transform: none; letter-spacing: 0; }
+.cpn-h:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.cpn-two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); align-items: start; }
+.cpn-two > [hidden] { display: none; }
+@media (max-width: 520px) { .cpn-two { grid-template-columns: 1fr; } }
+
+.cpn-pick { display: grid; gap: var(--s-2); padding: var(--s-4); border: 1px solid var(--border); border-radius: var(--r-md); min-width: 0; }
+.cpn-pick[hidden] { display: none; }
+.cpn-pick-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
+.cpn-pick-t { font-weight: 600; }
+.cpn-count { color: var(--text-2); font-size: var(--fs-sm); font-weight: 600; }
+.cpn-list { display: grid; gap: var(--s-1); max-height: 260px; overflow: auto; overscroll-behavior: contain; }
+.cpn-opt { display: grid; grid-template-columns: auto 1fr; column-gap: var(--s-2); align-items: center; min-height: 44px; padding: var(--s-1) var(--s-3); border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); cursor: pointer; min-width: 0; }
+.cpn-opt input { grid-row: 1 / span 2; width: 18px; height: 18px; margin: 0; accent-color: var(--brand-600); }
+.cpn-opt:has(input:checked) { border-color: var(--brand-600); background: var(--brand-50); }
+.cpn-opt-t { overflow-wrap: anywhere; }
+.cpn-opt-s { grid-column: 2; font-size: var(--fs-xs); color: var(--text-3); overflow-wrap: anywhere; }

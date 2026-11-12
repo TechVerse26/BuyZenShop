@@ -1,0 +1,818 @@
+rules_version = '2';
+
+/*
+ * Shop Verse — Firestore Security Rules  (static / serverless trust model)
+ * ---------------------------------------------------------------------------
+ * There is no custom backend. These rules ARE the trusted layer:
+ *
+ *  • Staff roles live in  staff/{uid}  (writable only by `staff.manage`). Roles are NOT
+ *    stored in user-writable documents, so nobody can promote themselves.
+ *  • Customers can only write the narrow shapes listed here:
+ *      - create an order whose line prices / totals / shipping / coupon discount are
+ *        re-derived from catalog documents inside the same atomic batch;
+ *      - bump `reserved` on an inventory document by exactly the quantity of an order
+ *        created in the same batch (this is how overselling is prevented);
+ *      - release that reservation when they cancel their own *pending* order;
+ *      - profile, address, wishlist, cart, reviews, support tickets.
+ *  • Everything else (catalog, prices, stock, settings, order status, payments, coupons…)
+ *    is staff-only and gated by a permission (see rolePerms()).
+ *  • Read rules for "owner OR staff" data are written as SEPARATE `allow` statements, not as `a || b`.
+ *    A list query by staff has no `userId` constraint, so `resource.data.userId == uid` cannot be evaluated for it;
+ *    with separate statements an erroring statement simply does not match and the staff statement decides.
+ *    (The rules test engine runs strict, where an error inside `||` would otherwise deny.)
+ *
+ * Budget notes (Firestore limits: 10 get/exists calls per operation, 20 per batch):
+ *  An order batch uses at most 5 + N calls on the order op and 10 + 2N in total for
+ *  N order lines, so MAX_LINES = 5 (indexes 0..4 below) is the safe worst case.
+ *  If you raise MAX_LINES, extend lineOk()/lt()/el() accordingly and re-count calls.
+ *
+ * Pattern used to bind several documents to one order: every document written in the
+ * checkout batch carries `lastOrderId`, and the order document carries
+ * `createdAt == request.time`. getAfter() on the order proves "this order is created
+ * in THIS batch", so old orders cannot be replayed to reserve or release stock.
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ───────────────────────── generic helpers ───────────────────────── */
+
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return request.auth != null && request.auth.uid == uid; }
+
+    function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+    function nat(v, max) { return v is int && v >= 0 && v <= max; }
+    function bdPhone(v) { return v is string && v.matches('^01[3-9][0-9]{8}$'); }
+    function emailish(v) { return v is string && v.size() <= 120 && (v == '' || v.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$')); }
+
+    function ordAfter(id) {
+      return getAfter(/databases/$(database)/documents/orders/$(id)).data;
+    }
+
+    /* ───────────────────────── staff & permissions ───────────────────────── */
+
+    function staffDoc() {
+      return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data;
+    }
+
+    // A missing staff document makes get() fail → the expression errors → access is denied.
+    function perm(p) {
+      return request.auth != null && permFor(staffDoc(), p);
+    }
+    function permFor(s, p) {
+      return s.active == true && (s.role == 'super_admin' || p in rolePerms(s.role));
+    }
+    // True when the signed-in staff member holds ANY of the listed permissions (one staff read).
+    function permAny(ps) {
+      return request.auth != null && permAnyFor(staffDoc(), ps);
+    }
+    function permAnyFor(s, ps) {
+      return s.active == true && (s.role == 'super_admin' || rolePerms(s.role).hasAny(ps));
+    }
+
+    // Keep in sync with js/shared/constants.js (tests/rules.test.mjs checks this).
+    function rolePerms(r) {
+      return r == 'store_admin' ? [
+          'products.read','products.write','products.delete','costs.read',
+          'categories.write','brands.write','inventory.read','inventory.adjust',
+          'orders.read','orders.update','orders.cancel','orders.refund','payments.verify',
+          'customers.read','customers.write','coupons.read','coupons.write',
+          'shipping.write','content.write','reviews.moderate','support.read','support.reply',
+          'reports.read','reports.export','settings.read','settings.write','audit.read','mail.send'
+        ]
+        : r == 'product_manager' ? [
+          'products.read','products.write','products.delete','costs.read','categories.write',
+          'brands.write','inventory.read','content.write','reviews.moderate','coupons.read'
+        ]
+        : r == 'order_manager' ? [
+          'orders.read','orders.update','orders.cancel','payments.verify','customers.read',
+          'shipping.write','support.read','inventory.read','products.read','mail.send','coupons.read'
+        ]
+        : r == 'inventory_manager' ? [
+          'products.read','costs.read','inventory.read','inventory.adjust'
+        ]
+        : r == 'customer_support' ? [
+          'orders.read','customers.read','support.read','support.reply','reviews.moderate',
+          'mail.send','products.read'
+        ]
+        : r == 'reporting' ? [
+          'reports.read','reports.export','products.read','inventory.read','orders.read'
+        ]
+        : [];
+    }
+
+    match /staff/{uid} {
+      allow get: if isOwner(uid) || perm('staff.manage');
+      allow list: if perm('staff.manage');
+      allow create, update: if perm('staff.manage')
+        && request.resource.data.role in ['super_admin','store_admin','product_manager','order_manager','inventory_manager','customer_support','reporting']
+        && request.resource.data.active is bool
+        && request.resource.data.keys().hasOnly(['role','active','email','name','createdAt','updatedAt','createdBy']);
+      allow delete: if perm('staff.manage');
+    }
+
+    match /auditLogs/{id} {
+      allow read: if perm('audit.read');
+      allow create: if request.auth != null
+        && auditOk(staffDoc(), request.resource.data)
+        && request.resource.data.keys().hasOnly(['actorUid','actorEmail','actorRole','action','entity','entityId','summary','before','after','createdAt'])
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && str(request.resource.data.action, 1, 80)
+        && str(request.resource.data.summary, 0, 600);
+
+      function auditOk(s, n) { return s.active == true && n.actorRole == s.role; }
+      allow update, delete: if false;
+    }
+
+    // Read-only access to the pre-upgrade activity log.
+    match /activity_logs/{id} {
+      allow read: if perm('audit.read');
+      allow write: if false;
+    }
+
+    /* ───────────────────────── settings & content ───────────────────────── */
+
+    match /settings/public {
+      allow read: if true;
+      allow write: if perm('settings.write');
+    }
+    match /settings/private {
+      allow read: if perm('settings.read');
+      allow write: if perm('settings.write');
+    }
+    // Cache-busting stamp for the storefront catalog cache (bumped by any catalog write).
+    match /meta/catalog {
+      allow read: if true;
+      allow write: if permAny(['products.write','categories.write','brands.write','inventory.adjust','orders.update','reviews.moderate']);
+    }
+    // The home layout: the editor saves the sanitised sections (at most 24) and the server time. The storefront sanitises again on every read.
+    match /content/home {
+      allow read: if true;
+      allow create, update: if perm('content.write')
+        && request.resource.data.keys().hasOnly(['sections','updatedAt'])
+        && request.resource.data.sections is list
+        && request.resource.data.sections.size() <= 24;
+      allow delete: if perm('content.write');
+    }
+    // CMS pages (shown at /page/<slug>): a clean address, only the known fields, sizes within limits, the server time. The slug never changes (pages are created and deleted).
+    function pageDoc(slug) {
+      return slug.matches('^[a-z0-9]+(-[a-z0-9]+)*$') && slug.size() <= 60
+        && request.resource.data.keys().hasOnly(['title','body','visible','footer','sort','seoTitle','seoDescription','updatedAt'])
+        && str(request.resource.data.title, 1, 120)
+        && str(request.resource.data.body, 0, 30000)
+        && request.resource.data.visible is bool
+        && request.resource.data.footer is bool
+        && nat(request.resource.data.sort + 9999, 19998)
+        && str(request.resource.data.seoTitle, 0, 70)
+        && str(request.resource.data.seoDescription, 0, 200)
+        && request.resource.data.updatedAt == request.time;
+    }
+    match /pages/{slug} {
+      allow read: if resource.data.visible == true;
+      allow read: if perm('content.write');
+      allow create, update: if perm('content.write') && pageDoc(slug);
+      allow delete: if perm('content.write');
+    }
+    match /shippingZones/{zid} {
+      allow read: if true;
+      allow write: if perm('shipping.write');
+    }
+
+    /* ───────────────────────── catalog ───────────────────────── */
+
+    match /categories/{cid} {
+      allow read: if resource.data.visible == true;
+      allow read: if permAny(['products.read','categories.write']);
+      allow write: if perm('categories.write');
+    }
+    match /brands/{bid} {
+      allow read: if resource.data.visible == true;
+      allow read: if permAny(['products.read','brands.write']);
+      allow write: if perm('brands.write');
+    }
+
+    match /products/{pid} {
+      allow read: if resource.data.status == 'published';
+      allow read: if perm('products.read');
+      allow create: if perm('products.write') && validProduct();
+      allow update: if ratingUpdate() || (perm('products.write') && validProduct());
+      allow delete: if perm('products.delete');
+
+      function validProduct() {
+        let p = request.resource.data;
+        return str(p.name, 1, 200)
+          && p.slug is string && p.slug.size() <= 120 && p.slug.matches('^[a-z0-9]+(-[a-z0-9]+)*$')
+          && p.status in ['draft','published','archived']
+          && p.type in ['simple','variable']
+          && nat(p.price, 100000000)
+          && (p.get('salePrice', null) == null || (nat(p.salePrice, 100000000) && p.salePrice < p.price))
+          && p.keys().size() <= 90;
+      }
+      // Review moderators may only touch the rating aggregate.
+      function ratingUpdate() {
+        return request.auth != null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ratingAvg','ratingCount','ratingSum','updatedAt'])
+          && perm('reviews.moderate');
+      }
+    }
+
+    match /productPrivate/{pid} {
+      allow read: if perm('costs.read');
+      allow write: if perm('products.write');
+    }
+    match /slugIndex/{s} {
+      allow read: if perm('products.read');
+      allow write: if perm('products.write');
+    }
+    match /skuIndex/{s} {
+      allow read: if perm('products.read');
+      allow write: if perm('products.write');
+    }
+
+    /*
+     * inventory/{key}  — one document per sellable unit (key = productId, or productId__variantId).
+     * Holds the authoritative price / stock used at checkout. Customers may change `reserved`
+     * and `lastOrderId` only, and only together with an order created / cancelled in the same batch.
+     */
+    match /inventory/{key} {
+      allow read: if true;
+      allow create, delete: if perm('products.write');
+      allow update: if reserve() || release() || staffInventory();
+
+      function onSale(inv) {
+        return inv.get('salePrice', null) != null
+          && inv.salePrice < inv.price
+          && (inv.get('saleStart', null) == null || request.time >= inv.saleStart)
+          && (inv.get('saleEnd', null) == null || request.time < inv.saleEnd);
+      }
+      function effPrice(inv) { return onSale(inv) ? inv.salePrice : inv.price; }
+      function aff() { return request.resource.data.diff(resource.data).affectedKeys(); }
+      function lid() { return request.resource.data.get('lastOrderId', ''); }
+      function ord() {
+        return getAfter(/databases/$(database)/documents/orders/$(lid())).data;
+      }
+
+      // The order document is fetched once and passed in (o), so the call budget does not
+      // depend on the engine caching repeated getAfter() calls.
+      function reserve() {
+        return request.auth != null
+          && aff().hasOnly(['reserved','lastOrderId'])
+          && lid() is string && lid() != ''
+          && reserveOk(ord());
+      }
+      function reserveOk(o) {
+        return o.userId == request.auth.uid
+          && o.createdAt == request.time
+          && resource.data.active == true
+          && o.items[key].unitPrice == effPrice(resource.data)
+          && o.items[key].regularPrice == resource.data.price
+          && o.items[key].productId == resource.data.productId
+          && o.items[key].categoryId == resource.data.categoryId
+          && o.items[key].qty <= resource.data.maxPerOrder
+          && (resource.data.track == true
+                ? (request.resource.data.reserved == resource.data.reserved + o.items[key].qty
+                   && (resource.data.allowBackorder == true || request.resource.data.reserved <= resource.data.stock))
+                : !aff().hasAny(['reserved']));
+      }
+
+      function release() {
+        return request.auth != null
+          && aff().hasOnly(['reserved','lastOrderId'])
+          && lid() is string && lid() != ''
+          && releaseOk(ord());
+      }
+      function releaseOk(o) {
+        return o.userId == request.auth.uid
+          && o.status == 'cancelled'
+          && o.cancelledAt == request.time
+          && resource.data.track == true
+          && request.resource.data.reserved == resource.data.reserved - o.items[key].qty
+          && request.resource.data.reserved >= 0;
+      }
+
+      // Staff writes should always include updatedAt: that keeps them out of the customer branches
+      // above (no getAfter) so every staff write costs exactly one access call (the staff document).
+      function staffInventory() {
+        return request.auth != null && staffInvOk(staffDoc(), aff());
+      }
+      function staffInvOk(s, a) {
+        return s.active == true
+          && (s.role == 'super_admin'
+              || rolePerms(s.role).hasAny(['products.write','inventory.adjust'])
+              || ('orders.update' in rolePerms(s.role) && a.hasOnly(['stock','reserved','lastOrderId','updatedAt'])));
+      }
+    }
+
+    match /inventoryMovements/{id} {
+      allow read: if perm('inventory.read');
+      allow create: if permAny(['inventory.adjust','orders.update']) && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+    match /suppliers/{id} {
+      allow read: if perm('inventory.read');
+      allow write: if perm('inventory.adjust');
+    }
+    match /purchases/{id} {
+      allow read: if perm('inventory.read');
+      allow create: if perm('inventory.adjust') && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    /* ───────────────────────── coupons ───────────────────────── */
+
+    match /coupons/{code} {
+      allow get: if signedIn();
+      allow list: if perm('coupons.read');
+      allow create, delete: if perm('coupons.write');
+      allow update: if redeem() || perm('coupons.write');
+
+      // Customers may only bump usedCount by one, for an order created in this very batch.
+      function redeem() {
+        let n = request.resource.data;
+        return request.auth != null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount','lastOrderId'])
+          && n.usedCount == resource.data.usedCount + 1
+          && (resource.data.get('usageLimit', null) == null || n.usedCount <= resource.data.usageLimit)
+          && resource.data.active == true
+          && n.get('lastOrderId', '') != ''
+          && redeemOk(ordAfter(n.lastOrderId));
+      }
+      function redeemOk(o) {
+        return o.userId == request.auth.uid && o.createdAt == request.time && o.couponCode == code;
+      }
+    }
+
+    // Per-customer usage counter. Document id = CODE__UID.
+    match /couponUsage/{usageId} {
+      allow get: if (request.auth != null && usageId.split('__').size() == 2 && usageId.split('__')[1] == request.auth.uid) || perm('coupons.read');
+      allow list: if perm('coupons.read');
+      // Customers write their own counter as part of checkout; staff with coupons.write may
+      // backfill / correct it (legacy migration, support goodwill).
+      allow create: if usageWrite(1, false) || perm('coupons.write');
+      allow update: if usageWrite(resource.data.count + 1, true) || perm('coupons.write');
+      allow delete: if perm('coupons.write');
+
+      function usageWrite(expected, isUpdate) {
+        let n = request.resource.data;
+        let parts = usageId.split('__');
+        return request.auth != null
+          && parts.size() == 2 && parts[1] == request.auth.uid
+          && n.keys().hasOnly(['code','userId','count','lastOrderId','updatedAt'])
+          && n.code == parts[0] && n.userId == request.auth.uid
+          && n.count == expected && n.updatedAt == request.time
+          && n.lastOrderId is string
+          && usageOrderOk(ordAfter(n.lastOrderId), n)
+          && perCustomerOk(get(/databases/$(database)/documents/coupons/$(n.code)).data, n.count);
+      }
+      function usageOrderOk(o, n) {
+        return o.userId == request.auth.uid && o.createdAt == request.time && o.couponCode == n.code;
+      }
+      function perCustomerOk(c, count) {
+        return c.get('perCustomerLimit', null) == null || count <= c.perCustomerLimit;
+      }
+    }
+
+    // A manual-payment transaction id can be attached to one order only. Id = normalised TrxID.
+    match /paymentTrx/{trxId} {
+      allow read: if perm('orders.read');
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['orderId','userId','method','createdAt'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && trxOrderOk(ordAfter(request.resource.data.orderId), trxId);
+
+      function trxOrderOk(o, tid) {
+        return o.userId == request.auth.uid && o.payment.trxId == tid && o.updatedAt == request.time;
+      }
+      allow update: if false;
+      allow delete: if perm('payments.verify');
+    }
+
+    /* ───────────────────────── customers ───────────────────────── */
+
+    match /users/{uid} {
+      allow get: if isOwner(uid) || perm('customers.read');
+      allow list: if perm('customers.read');
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['displayName','email','phone','photoURL','notifyPrefs','createdAt','lastLoginAt','updatedAt','defaultAddressId'])
+        && request.resource.data.createdAt == request.time;
+      allow update: if (isOwner(uid) && profileUpdate()) || (isOwner(uid) && orderStamp()) || (perm('customers.write') && staffFlags());
+      allow delete: if false;
+
+      function aff() { return request.resource.data.diff(resource.data).affectedKeys(); }
+      function profileUpdate() {
+        return aff().hasOnly(['displayName','email','phone','photoURL','notifyPrefs','lastLoginAt','defaultAddressId','updatedAt'])
+          && str(request.resource.data.get('displayName', ''), 0, 80);
+      }
+      // Rate-limit + restriction gate for checkout (one order per 15 s, restricted accounts blocked).
+      function orderStamp() {
+        return aff().hasOnly(['lastOrderAt'])
+          && request.resource.data.lastOrderAt == request.time
+          && resource.data.get('restricted', false) == false
+          && (resource.data.get('lastOrderAt', null) == null
+              || request.time > resource.data.lastOrderAt + duration.value(15, 's'));
+      }
+      // Staff may only flip the restriction. Restricting needs a reason (3–200 characters) and the server time; lifting it needs nothing more.
+      function staffFlags() {
+        return aff().hasOnly(['restricted','restrictedReason','restrictedAt','updatedAt'])
+          && request.resource.data.get('restricted', false) is bool
+          && (request.resource.data.get('restricted', false) == false
+              || (str(request.resource.data.get('restrictedReason', ''), 3, 200)
+                  && request.resource.data.get('restrictedAt', null) == request.time));
+      }
+
+      match /addresses/{aid} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['label','name','phone','district','upazila','area','postalCode','line1','isDefault','updatedAt'])
+          && str(request.resource.data.name, 2, 80) && bdPhone(request.resource.data.phone)
+          && str(request.resource.data.district, 2, 40) && str(request.resource.data.line1, 5, 300);
+      }
+      match /wishlist/{pid} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['productId','addedAt'])
+          && request.resource.data.productId == pid;
+      }
+      match /cart/{cid} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['items','updatedAt'])
+          && request.resource.data.items is map && request.resource.data.items.size() <= 60;
+      }
+      match /notifications/{nid} {
+        allow read, delete: if isOwner(uid);
+        allow create: if permAny(['orders.update','support.reply']);
+        allow update: if isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      }
+    }
+
+    match /userPrivate/{uid} {
+      allow read: if perm('customers.read');
+      allow write: if perm('customers.write');
+
+      // Internal notes about a customer: one document per note, so two people adding notes at once never overwrite each other.
+      // The customer never reads them (not even their own). A note is never edited, only written and deleted.
+      match /notes/{nid} {
+        allow read: if perm('customers.read');
+        allow create: if perm('customers.write')
+          && request.resource.data.keys().hasOnly(['text','authorUid','authorEmail','createdAt'])
+          && str(request.resource.data.text, 1, 1000)
+          && request.resource.data.authorUid == request.auth.uid
+          && str(request.resource.data.authorEmail, 0, 200)
+          && request.resource.data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if perm('customers.write');
+      }
+    }
+
+    /* ───────────────────────── orders ───────────────────────── */
+
+    match /orders/{orderId} {
+      allow get, list: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow get, list: if perm('orders.read');
+      allow create: if canCreateOrder();
+      allow update: if customerCancel() || customerReturn() || customerPayResubmit() || staffUpdate();
+      allow delete: if false;
+
+      function d() { return request.resource.data; }
+
+      /* ---- order line helpers (index based; MAX_LINES = 5) ---- */
+      function has(i) { return d().itemOrder.size() > i; }
+      function lineKeyOf(it) {
+        return it.variantId == null ? it.productId : it.productId + '__' + it.variantId;
+      }
+      function lt(i) { return has(i) ? d().items[d().itemOrder[i]].lineTotal : 0; }
+      function lineOk(i) { return !has(i) || lineValid(d().items[d().itemOrder[i]], d().itemOrder[i]); }
+      function lineValid(it, key) {
+        return it.keys().hasOnly(['productId','variantId','sku','name','variantLabel','unitPrice','regularPrice','qty','lineTotal','image','categoryId'])
+          && str(it.productId, 1, 60) && str(it.sku, 0, 60) && str(it.name, 1, 200)
+          && str(it.variantLabel, 0, 120) && str(it.image, 0, 600) && str(it.categoryId, 0, 60)
+          && (it.variantId == null || str(it.variantId, 1, 40))
+          && it.qty is int && it.qty >= 1 && it.qty <= 50
+          && nat(it.unitPrice, 100000000) && nat(it.regularPrice, 100000000)
+          && it.lineTotal == it.unitPrice * it.qty
+          && key == lineKeyOf(it)
+          && getAfter(/databases/$(database)/documents/inventory/$(key)).data.lastOrderId == orderId;
+      }
+      function lineEligible(it, c) {
+        return (c.appliesTo == 'all'
+                || (c.appliesTo == 'products' && it.productId in c.productIds)
+                || (c.appliesTo == 'categories' && it.categoryId in c.categoryIds))
+          && (c.get('excludeSaleItems', false) != true || it.unitPrice == it.regularPrice);
+      }
+      function el(i, c) {
+        return has(i) && lineEligible(d().items[d().itemOrder[i]], c) ? d().items[d().itemOrder[i]].lineTotal : 0;
+      }
+
+      /* ---- create ---- */
+      function validCustomer(c) {
+        return c.keys().hasOnly(['name','phone','email']) && str(c.name, 2, 80) && bdPhone(c.phone) && emailish(c.email);
+      }
+      function validAddress(a) {
+        return a.keys().hasOnly(['name','phone','district','upazila','area','postalCode','line1','notes'])
+          && str(a.name, 2, 80) && bdPhone(a.phone) && str(a.district, 2, 40) && str(a.upazila, 0, 60)
+          && str(a.area, 0, 80) && str(a.postalCode, 0, 10) && str(a.line1, 5, 300) && str(a.notes, 0, 200);
+      }
+      function validShape() {
+        return d().itemOrder is list && d().itemOrder.size() >= 1 && d().itemOrder.size() <= 5
+          && d().items is map && d().items.size() == d().itemOrder.size()
+          && d().notes.keys().hasOnly(['customer']) && str(d().notes.customer, 0, 300);
+      }
+      function validTotals() {
+        let t = d().totals;
+        return t.keys().hasOnly(['subtotal','eligibleSubtotal','discount','shipping','tax','total'])
+          && nat(t.subtotal, 100000000) && nat(t.eligibleSubtotal, 100000000) && nat(t.discount, 100000000)
+          && nat(t.shipping, 1000000) && t.tax == 0
+          && t.subtotal == lt(0) + lt(1) + lt(2) + lt(3) + lt(4)
+          && t.discount <= t.eligibleSubtotal && t.eligibleSubtotal <= t.subtotal
+          && t.total == t.subtotal - t.discount + t.shipping;
+      }
+      function baseShip(z, amount) {
+        return (z.get('freeOver', null) != null && amount >= z.freeOver) ? 0 : z.fee;
+      }
+      function validPricing() {
+        let z = get(/databases/$(database)/documents/shippingZones/$(d().zoneId)).data;
+        let t = d().totals;
+        return str(d().zoneId, 1, 60) && z.active == true
+          && d().address.district in z.districts && d().zoneName == z.name
+          && (d().couponCode == ''
+                ? (t.discount == 0 && t.eligibleSubtotal == 0 && t.shipping == baseShip(z, t.subtotal))
+                : validCoupon(z, t));
+      }
+      function validCoupon(z, t) {
+        let c = getAfter(/databases/$(database)/documents/coupons/$(d().couponCode)).data;
+        return d().couponCode.matches('^[A-Z0-9-]{3,24}$')
+          && c.active == true
+          && (c.get('startsAt', null) == null || request.time >= c.startsAt)
+          && (c.get('endsAt', null) == null || request.time < c.endsAt)
+          && t.subtotal >= c.get('minOrder', 0)
+          && (c.get('customerIds', null) == null || c.customerIds.size() == 0 || request.auth.uid in c.customerIds)
+          && c.lastOrderId == orderId
+          && getAfter(/databases/$(database)/documents/couponUsage/$(d().couponCode + '__' + request.auth.uid)).data.lastOrderId == orderId
+          && t.eligibleSubtotal == el(0, c) + el(1, c) + el(2, c) + el(3, c) + el(4, c)
+          && t.discount == couponDiscount(c, t.eligibleSubtotal)
+          && t.shipping == (c.type == 'free_shipping' ? 0 : baseShip(z, t.subtotal - t.discount));
+      }
+      function couponDiscount(c, elig) {
+        return c.type == 'percent'
+          ? ((c.get('maxDiscount', null) != null && math.floor(elig * c.value / 100) > c.maxDiscount)
+               ? c.maxDiscount : math.floor(elig * c.value / 100))
+          : (c.type == 'fixed' ? (c.value < elig ? c.value : elig) : 0);
+      }
+      function validPayment() {
+        let p = d().payment;
+        return p.keys().hasOnly(['method','status','trxId','senderNumber','amountDue'])
+          && p.method in ['cod','bkash','nagad']
+          && p.amountDue == d().totals.total
+          && (p.method == 'cod'
+                ? (p.status == 'unpaid' && p.trxId == '' && p.senderNumber == '')
+                : (p.status == 'awaiting_verification' && p.trxId.matches('^[A-Z0-9]{6,20}$') && bdPhone(p.senderNumber)
+                   && getAfter(/databases/$(database)/documents/paymentTrx/$(p.trxId)).data.orderId == orderId));
+      }
+
+      function canCreateOrder() {
+        return request.auth != null
+          && orderId.matches('^[A-Z0-9]{2,6}-[0-9]{6}-[A-Z0-9]{6}$')
+          && d().keys().hasOnly(['schemaVersion','orderNumber','userId','customer','address','zoneId','zoneName','items','itemOrder','totals','couponCode','payment','status','notes','createdAt','updatedAt'])
+          && d().schemaVersion == 2 && d().orderNumber == orderId && d().userId == request.auth.uid
+          && d().status == 'pending' && d().createdAt == request.time && d().updatedAt == request.time
+          && str(d().zoneName, 1, 80) && d().couponCode is string
+          && validCustomer(d().customer) && validAddress(d().address)
+          && validShape() && validTotals()
+          && lineOk(0) && lineOk(1) && lineOk(2) && lineOk(3) && lineOk(4)
+          && validPayment() && validPricing()
+          && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastOrderAt == request.time;
+      }
+
+      /* ---- customer updates ---- */
+      function customerCancel() {
+        let n = request.resource.data;
+        return request.auth != null
+          && resource.data.userId == request.auth.uid
+          && resource.data.status == 'pending' && resource.data.payment.status != 'paid'
+          && n.status == 'cancelled'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','cancelledAt','cancelReason','updatedAt'])
+          && n.cancelledAt == request.time && n.updatedAt == request.time && str(n.cancelReason, 0, 200);
+      }
+      function customerReturn() {
+        let n = request.resource.data;
+        return request.auth != null
+          && resource.data.userId == request.auth.uid
+          && resource.data.status == 'delivered' && n.status == 'return_requested'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','returnRequestedAt','updatedAt'])
+          && n.returnRequestedAt == request.time && n.updatedAt == request.time
+          && returnDocOk(getAfter(/databases/$(database)/documents/returns/$(orderId)).data);
+      }
+      function returnDocOk(r) {
+        return r.userId == request.auth.uid && r.createdAt == request.time;
+      }
+      // After staff mark a manual payment as failed the customer may submit a new TrxID.
+      function customerPayResubmit() {
+        let n = request.resource.data;
+        return request.auth != null
+          && resource.data.userId == request.auth.uid
+          && resource.data.status == 'pending' && resource.data.payment.status == 'failed'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['payment','updatedAt'])
+          && n.updatedAt == request.time
+          && n.payment.keys().hasOnly(['method','status','trxId','senderNumber','amountDue'])
+          && n.payment.method == resource.data.payment.method && n.payment.method != 'cod'
+          && n.payment.amountDue == resource.data.payment.amountDue
+          && n.payment.status == 'awaiting_verification'
+          && n.payment.trxId.matches('^[A-Z0-9]{6,20}$') && bdPhone(n.payment.senderNumber)
+          && getAfter(/databases/$(database)/documents/paymentTrx/$(n.payment.trxId)).data.orderId == orderId;
+      }
+
+      /* ---- staff updates ---- */
+      function validTransition(from, to) {
+        let f = from.lower();
+        return (f == 'pending' && to in ['confirmed','processing','cancelled'])
+          || (f == 'confirmed' && to in ['processing','cancelled'])
+          || (f == 'processing' && to in ['packed','shipped','delivered','cancelled'])
+          || (f == 'packed' && to in ['shipped','cancelled'])
+          || (f == 'shipped' && to in ['delivered','returned'])
+          || (f == 'delivered' && to in ['return_requested','refund_pending'])
+          || (f == 'return_requested' && to in ['returned','delivered','refund_pending'])
+          || (f == 'returned' && to in ['refund_pending','refunded'])
+          || (f == 'refund_pending' && to in ['refunded']);
+      }
+      function staffUpdate() {
+        return request.auth != null && staffUpdateOk(staffDoc());
+      }
+      // `s` is the staff document, read once for the whole evaluation.
+      function staffUpdateOk(s) {
+        let n = request.resource.data;
+        let a = request.resource.data.diff(resource.data).affectedKeys();
+        return permFor(s, 'orders.update')
+          && a.hasOnly(['status','payment','shipping','notes','updatedAt','confirmedAt','shippedAt','deliveredAt','cancelledAt','cancelReason','returnRequestedAt','refund','schemaVersion','items','itemOrder'])
+          && n.updatedAt == request.time
+          && (!a.hasAny(['status']) || validTransition(resource.data.status, n.status))
+          && (!a.hasAny(['payment']) || permFor(s, 'payments.verify') || permFor(s, 'orders.refund'))
+          && (n.status != 'cancelled' || resource.data.status == 'cancelled' || permFor(s, 'orders.cancel'))
+          && ((n.status != 'refund_pending' && n.status != 'refunded') || resource.data.status == n.status || permFor(s, 'orders.refund'))
+          && (!a.hasAny(['schemaVersion','items','itemOrder']) || permFor(s, 'migrate.run'));
+      }
+
+      /* ---- timeline ---- */
+      match /events/{eid} {
+        allow read: if request.auth != null && resource.data.userId == request.auth.uid && resource.data.visibility == 'customer';
+        allow read: if perm('orders.read');
+        allow create: if permAny(['orders.update','support.reply']);
+        allow update, delete: if false;
+      }
+    }
+
+    match /orderPrivate/{oid} {
+      allow read: if perm('orders.read');
+      allow write: if perm('orders.update');
+    }
+
+    /* ───────────────────────── returns & refunds ───────────────────────── */
+
+    match /returns/{rid} {
+      allow get, list: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow get, list: if perm('orders.read');
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['orderNumber','userId','lines','reason','details','status','createdAt','updatedAt'])
+        && rid == request.resource.data.orderNumber
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'requested'
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time
+        && str(request.resource.data.reason, 2, 100) && str(request.resource.data.details, 0, 600)
+        && request.resource.data.lines is list && request.resource.data.lines.size() >= 1 && request.resource.data.lines.size() <= 5
+        && returnOrderOk(get(/databases/$(database)/documents/orders/$(rid)).data, ordAfter(rid));
+
+      function returnOrderOk(before, after) {
+        return before.userId == request.auth.uid && before.status == 'delivered' && after.status == 'return_requested';
+      }
+      allow update: if perm('orders.update');
+      allow delete: if false;
+    }
+    match /refunds/{fid} {
+      allow get, list: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow get, list: if perm('orders.read');
+      allow create, update: if perm('orders.refund');
+      allow delete: if false;
+    }
+
+    /* ───────────────────────── reviews ───────────────────────── */
+
+    // Document id = PRODUCTID__UID  (one review per customer per product).
+    match /reviews/{rid} {
+      allow read: if resource.data.status == 'approved';
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read: if perm('reviews.moderate');
+      allow create: if reviewCreate();
+      allow update: if reviewEditOwn() || reviewVote() || perm('reviews.moderate');
+      allow delete: if (request.auth != null && resource.data.userId == request.auth.uid && resource.data.status == 'pending')
+        || perm('reviews.moderate');
+
+      function reviewCreate() {
+        let n = request.resource.data;
+        return request.auth != null
+          && n.keys().hasOnly(['productId','userId','userName','rating','title','text','status','verified','orderNumber','lineKey','helpfulCount','createdAt','updatedAt'])
+          && rid == n.productId + '__' + request.auth.uid
+          && n.userId == request.auth.uid
+          && n.rating is int && n.rating >= 1 && n.rating <= 5
+          && str(n.title, 2, 100) && str(n.text, 5, 1000) && str(n.userName, 0, 80)
+          && n.status == 'pending' && n.helpfulCount == 0
+          && n.createdAt == request.time && n.updatedAt == request.time
+          && (n.verified == false
+              || (n.verified == true
+                  && verifiedOk(get(/databases/$(database)/documents/orders/$(n.orderNumber)).data, n)));
+      }
+      function verifiedOk(o, n) {
+        return o.userId == request.auth.uid && o.status == 'delivered' && o.items[n.lineKey].productId == n.productId;
+      }
+      function reviewEditOwn() {
+        let n = request.resource.data;
+        return request.auth != null && resource.data.userId == request.auth.uid && resource.data.status == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating','title','text','updatedAt'])
+          && n.rating is int && n.rating >= 1 && n.rating <= 5 && str(n.title, 2, 100) && str(n.text, 5, 1000)
+          && n.updatedAt == request.time;
+      }
+      function reviewVote() {
+        return request.auth != null && resource.data.status == 'approved' && resource.data.userId != request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['helpfulCount'])
+          && request.resource.data.helpfulCount == resource.data.helpfulCount + 1
+          && !exists(/databases/$(database)/documents/reviews/$(rid)/votes/$(request.auth.uid))
+          && existsAfter(/databases/$(database)/documents/reviews/$(rid)/votes/$(request.auth.uid));
+      }
+
+      match /votes/{vid} {
+        allow read: if isOwner(vid) || perm('reviews.moderate');
+        allow create: if isOwner(vid)
+          && request.resource.data.keys().hasOnly(['createdAt'])
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+    match /reviewReports/{id} {
+      allow read: if perm('reviews.moderate');
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['reviewId','productId','reporterId','reason','createdAt'])
+        && id == request.resource.data.reviewId + '__' + request.auth.uid
+        && request.resource.data.reporterId == request.auth.uid
+        && str(request.resource.data.reason, 2, 200)
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if perm('reviews.moderate');
+    }
+
+    /* ───────────────────────── support & marketing ───────────────────────── */
+
+    match /supportTickets/{tid} {
+      allow get, list: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow get, list: if perm('support.read');
+      allow create: if ticketCreate();
+      allow update: if ticketReopen() || perm('support.reply');
+      allow delete: if false;
+
+      function ticketCreate() {
+        let n = request.resource.data;
+        return n.keys().hasOnly(['userId','name','email','phone','subject','message','orderNumber','status','priority','createdAt','updatedAt','lastAuthor'])
+          && (request.auth != null ? n.userId == request.auth.uid : n.userId == null)
+          && str(n.name, 2, 80) && emailish(n.email) && str(n.phone, 0, 20)
+          && str(n.subject, 3, 120) && str(n.message, 5, 2000) && str(n.orderNumber, 0, 40)
+          && n.status == 'open' && n.priority == 'normal'
+          && n.createdAt == request.time && n.updatedAt == request.time && n.lastAuthor == 'customer';
+      }
+      function ticketReopen() {
+        return request.auth != null && resource.data.userId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt','lastAuthor'])
+          && request.resource.data.status == 'open' && request.resource.data.lastAuthor == 'customer'
+          && request.resource.data.updatedAt == request.time;
+      }
+
+      match /messages/{mid} {
+        allow read: if (request.auth != null && get(/databases/$(database)/documents/supportTickets/$(tid)).data.userId == request.auth.uid) || perm('support.read');
+        allow create: if (request.auth != null
+              && get(/databases/$(database)/documents/supportTickets/$(tid)).data.userId == request.auth.uid
+              && request.resource.data.keys().hasOnly(['authorType','authorUid','text','createdAt'])
+              && request.resource.data.authorType == 'customer' && request.resource.data.authorUid == request.auth.uid
+              && str(request.resource.data.text, 1, 2000) && request.resource.data.createdAt == request.time)
+          || (perm('support.reply')
+              && request.resource.data.keys().hasOnly(['authorType','authorUid','text','createdAt'])
+              && request.resource.data.authorType == 'staff' && request.resource.data.authorUid == request.auth.uid
+              && str(request.resource.data.text, 1, 2000) && request.resource.data.createdAt == request.time);
+        allow update, delete: if false;
+      }
+    }
+
+    // Document id = lower-cased e-mail. Re-subscribing is an idempotent update.
+    match /newsletter/{emailKey} {
+      allow read: if perm('customers.read');
+      allow create, update: if request.resource.data.keys().hasOnly(['email','source','createdAt'])
+        && request.resource.data.email == emailKey && emailish(request.resource.data.email) && request.resource.data.email != ''
+        && str(request.resource.data.source, 0, 40);
+      allow delete: if perm('customers.write');
+    }
+
+    // Outbox consumed by the optional "Trigger Email from Firestore" extension (see docs/NOTIFICATIONS.md).
+    match /mail/{id} {
+      allow read: if perm('mail.send');
+      allow create: if perm('mail.send');
+      allow update, delete: if false;
+    }
+  }
+}

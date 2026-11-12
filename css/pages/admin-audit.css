@@ -1,0 +1,34 @@
+/* Audit log (admin) — filters, entry table, details dialog. Page rules only; tokens, no hard-coded colours; works at 360 px, light and dark. */
+.aud .page-head .page-sub { overflow-wrap: anywhere; }
+.aud-selects { display: contents; }
+.aud-sel { flex: 0 1 200px; min-width: 0; }
+.aud-sel .select { width: 100%; min-width: 0; }
+.aud-count { min-height: 1.5em; margin: 0 0 var(--s-3); font-size: var(--fs-sm); }
+.aud-count .btn { margin-inline-start: var(--s-2); }
+
+.aud .table-wrap { margin-bottom: var(--s-3); }
+.aud-who { display: flex; flex-wrap: wrap; align-items: center; justify-content: inherit; gap: var(--s-1) var(--s-2); }
+.aud-mail { overflow-wrap: anywhere; }
+.aud-what { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.aud-code { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-2); overflow-wrap: anywhere; }
+.aud-about { overflow-wrap: anywhere; }
+.aud-more { display: flex; justify-content: center; padding-top: var(--s-4); }
+
+/* details dialog */
+.aud-uid { margin-top: 2px; color: var(--text-3); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.aud-id { overflow-wrap: anywhere; }
+.aud-open { margin: var(--s-3) 0 0; }
+.aud-h { margin: var(--s-5) 0 var(--s-1); font-size: var(--fs-md); }
+.aud-diff tbody th { position: static; background: transparent; text-align: start; font-weight: 500; white-space: normal; overflow-wrap: anywhere; }
+.aud-diff tbody tr:last-child th { border-bottom: 0; }
+.aud-diff .badge { margin-inline-start: var(--s-1); }
+.aud-val { display: block; font-family: var(--font-mono); font-size: var(--fs-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+.aud-raw { margin-top: var(--s-4); }
+.aud-raw summary { cursor: pointer; font-weight: 600; }
+.aud-raw pre { margin: var(--s-2) 0 0; padding: var(--s-3); max-height: 280px; overflow: auto; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  .aud-sel { flex: 1 1 140px; }
+  .aud .table-stack .aud-who { justify-content: flex-end; }
+  .aud .table-stack .aud-what { justify-items: end; text-align: end; }
+}

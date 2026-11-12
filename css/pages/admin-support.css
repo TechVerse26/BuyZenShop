@@ -1,0 +1,27 @@
+/* Support (admin) — the queue and one request. Page rules only; tokens, no hard-coded colours; works at 360 px, light and dark. */
+.tkm-tabs { margin-bottom: var(--s-4); }
+.tkm-n { display: inline-block; min-width: 22px; margin-inline-start: var(--s-2); padding: 0 6px; border-radius: var(--r-full); background: var(--surface-3); color: var(--text-2); font-size: var(--fs-xs); font-weight: 700; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.tab[aria-selected="true"] .tkm-n { background: var(--brand-50); color: var(--brand-700); }
+
+.tkm-cell { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1) var(--s-2); min-width: 0; overflow-wrap: anywhere; }
+.tkm-sub { color: var(--text-2); font-size: var(--fs-sm); }
+.tkm-subject { overflow-wrap: anywhere; }
+
+.tkm .page-head h1 { overflow-wrap: anywhere; }
+.tkm-badges { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.tkm-msgs { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--s-4); }
+.tkm-msg { display: grid; gap: var(--s-1); max-width: 85%; padding: var(--s-3) var(--s-4); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; }
+.tkm-msg.is-customer { justify-self: start; border-end-start-radius: var(--r-sm); }
+.tkm-msg.is-staff { justify-self: end; background: var(--brand-50); border-color: var(--brand-100); border-end-end-radius: var(--r-sm); }
+.tkm-msg-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s-1) var(--s-3); font-size: var(--fs-sm); }
+.tkm-msg-head time { font-size: var(--fs-xs); white-space: nowrap; }
+.tkm-msg-text { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.tkm-send { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.tkm-selects { padding-top: var(--s-3); border-top: 1px solid var(--border); }
+@media (max-width: 640px) {
+  .tkm-tabs { gap: 0; }
+  .tkm-tabs .tab { flex: 1 1 auto; padding-inline: var(--s-2); text-align: center; }
+  .tkm-n { min-width: 20px; margin-inline-start: var(--s-1); padding: 0 5px; }
+  .tkm-msg { max-width: 100%; }
+  .tkm-send .btn { flex: 1 1 auto; justify-content: center; }
+}

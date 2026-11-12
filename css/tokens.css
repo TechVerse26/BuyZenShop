@@ -1,0 +1,145 @@
+/* ==========================================================================
+   Shop Verse — design tokens
+   One source of truth for colour, type, spacing, radius, elevation and motion.
+   Brand: deep teal on warm neutrals. No gradients, glow or neon. Light + dark.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* brand */
+  --brand-50:  #E8F3F1;
+  --brand-100: #CFE6E2;
+  --brand-500: #1A8577;
+  --brand-600: #0F6E62;   /* primary */
+  --brand-700: #0B5A50;   /* primary hover */
+  --brand-800: #084539;
+
+  /* neutral (warm) */
+  --bg:           #F7F5F0;
+  --surface:      #FFFFFF;
+  --surface-2:    #F1EEE7;   /* subtle fills, table headers, skeletons */
+  --surface-3:    #E8E4DA;
+  --border:       #E3DED3;
+  --border-strong:#CFC8B9;
+  --text:         #17211D;
+  --text-2:       #4B5751;   /* secondary text, AA on --bg */
+  --text-3:       #5C6760;   /* hints; ≥4.5:1 on bg, surface and surface-2 */
+  --on-brand:     #FFFFFF;
+
+  /* semantic */
+  --success:      #176B42;  --success-bg: #E6F4EC;  --success-bd: #BFE3CF;
+  --warning:      #8A5A00;  --warning-bg: #FFF3D6;  --warning-bd: #F1D58C;
+  --danger:       #B3321E;  --danger-bg:  #FCE9E5;  --danger-bd:  #F2B9AE;
+  --info:         #1F5FA6;  --info-bg:    #E5EFFA;  --info-bd:    #B5CFEA;
+  --sale:         #B3321E;
+  --star:         #B07400;
+
+  /* typography */
+  --font: "Hind Siliguri", "Noto Sans Bengali", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --fs-xs: 0.75rem;   /* 12 */
+  --fs-sm: 0.875rem;  /* 14 */
+  --fs-md: 1rem;      /* 16 */
+  --fs-lg: 1.125rem;  /* 18 */
+  --fs-xl: 1.375rem;  /* 22 */
+  --fs-2xl: 1.75rem;  /* 28 */
+  --fs-3xl: 2.25rem;  /* 36 */
+  --lh-tight: 1.25;
+  --lh-body: 1.6;
+
+  /* spacing (4px base) */
+  --s-1: 0.25rem; --s-2: 0.5rem; --s-3: 0.75rem; --s-4: 1rem; --s-5: 1.25rem;
+  --s-6: 1.5rem;  --s-8: 2rem;   --s-10: 2.5rem; --s-12: 3rem; --s-16: 4rem;
+
+  /* shape */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-full: 999px;
+
+  /* elevation: one hairline + one soft shadow, nothing glowing */
+  --shadow-sm: 0 1px 2px rgba(23, 33, 29, 0.06);
+  --shadow-md: 0 6px 20px rgba(23, 33, 29, 0.08);
+  --shadow-lg: 0 16px 40px rgba(23, 33, 29, 0.14);
+  --ring: 0 0 0 3px rgba(15, 110, 98, 0.35);
+
+  /* layout */
+  --container: 1200px;
+  --container-narrow: 760px;
+  --header-h: 60px;
+  --tabbar-h: 58px;
+  --sidebar-w: 248px;
+  --z-header: 40; --z-drawer: 60; --z-modal: 80; --z-toast: 100;
+
+  /* motion */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+}
+
+/* dark theme: explicit toggle, or system preference unless the user forced light */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --brand-50:  #10302B;
+  --brand-100: #16413A;
+  --brand-500: #3BB3A2;
+  --brand-600: #2FA595;
+  --brand-700: #46BBAA;
+  --brand-800: #7BD3C6;
+  --bg: #0F1513;
+  --surface: #171F1C;
+  --surface-2: #1F2824;
+  --surface-3: #2A3530;
+  --border: #2B3631;
+  --border-strong: #3B4943;
+  --text: #EDF1EE;
+  --text-2: #B9C4BE;
+  --text-3: #93A19A;
+  --on-brand: #0A1512;
+  --success: #5CC794;  --success-bg: #12281D;  --success-bd: #1F4B34;
+  --warning: #E8B94F;  --warning-bg: #2E2410;  --warning-bd: #574216;
+  --danger:  #F08A78;  --danger-bg:  #301713;  --danger-bd:  #5A2A22;
+  --info:    #7DB3EC;  --info-bg:    #121F2E;  --info-bd:    #26405F;
+  --sale:    #F08A78;
+  --star:    #E5A93C;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+  --ring: 0 0 0 3px rgba(59, 179, 162, 0.5);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --brand-50:  #10302B;
+    --brand-100: #16413A;
+    --brand-500: #3BB3A2;
+    --brand-600: #2FA595;
+    --brand-700: #46BBAA;
+    --brand-800: #7BD3C6;
+    --bg: #0F1513;
+    --surface: #171F1C;
+    --surface-2: #1F2824;
+    --surface-3: #2A3530;
+    --border: #2B3631;
+    --border-strong: #3B4943;
+    --text: #EDF1EE;
+    --text-2: #B9C4BE;
+    --text-3: #93A19A;
+    --on-brand: #0A1512;
+    --success: #5CC794;  --success-bg: #12281D;  --success-bd: #1F4B34;
+    --warning: #E8B94F;  --warning-bg: #2E2410;  --warning-bd: #574216;
+    --danger:  #F08A78;  --danger-bg:  #301713;  --danger-bd:  #5A2A22;
+    --info:    #7DB3EC;  --info-bg:    #121F2E;  --info-bd:    #26405F;
+    --sale:    #F08A78;
+    --star:    #E5A93C;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+    --ring: 0 0 0 3px rgba(59, 179, 162, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-1: 0ms; --dur-2: 0ms; }
+}

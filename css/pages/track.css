@@ -1,0 +1,18 @@
+/* Order tracking. Tokens only; the order cards and list rows come from order.css. */
+.trk { display: grid; gap: var(--s-4); align-content: start; max-width: 760px; }
+.trk .page-title { margin: 0; }
+.trk > p { margin: 0; }
+.trk-form { display: grid; gap: var(--s-3); max-width: 480px; }
+.trk-form .btn { justify-self: start; }
+.trk-recent { display: grid; gap: var(--s-3); margin-top: var(--s-4); }
+.trk-recent[hidden] { display: none; }
+.trk-recent h2 { margin: 0; font-size: var(--fs-lg); }
+.trk-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--s-3); }
+.trk-title { font-size: var(--fs-xl); overflow-wrap: anywhere; }
+.trk-head p { margin: var(--s-1) 0 0; }
+.trk-badges { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.trk-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.trk-foot p { margin: 0; font-weight: 600; }
+.trk-help { margin: 0; text-align: center; font-size: var(--fs-sm); }
+.trk > .alert { margin: 0; }
+.trk > .alert > span { min-width: 0; }

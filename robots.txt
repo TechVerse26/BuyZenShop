@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /cart
+Disallow: /checkout
+Disallow: /account
+Disallow: /order-success/
+Disallow: /track
+Disallow: /wishlist
+Disallow: /login
+
+Sitemap: https://tvshops.vercel.app/sitemap.xml

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Static routes only. Run `node tools/sitemap.mjs` before a deploy to add products, categories, brands and pages (see docs/DEPLOYMENT.md). -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://tvshops.vercel.app/</loc></url>
+  <url><loc>https://tvshops.vercel.app/shop</loc></url>
+  <url><loc>https://tvshops.vercel.app/contact</loc></url>
+</urlset>
